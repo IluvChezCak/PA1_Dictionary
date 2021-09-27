@@ -77,7 +77,7 @@ public class DictionaryConnection {
      */
     public synchronized void close() {
 
-        // TODO Send quit message
+
         try {
             socket.close();
         } catch (IOException e) {
@@ -97,32 +97,59 @@ public class DictionaryConnection {
      * @throws DictConnectionException If the connection was interrupted or the messages don't match their expected value.
      */
     public synchronized Collection<Definition> getDefinitions(String word, Database database) throws DictConnectionException {
+
         Collection<Definition> set = new ArrayList<>();
 
-        // TODO Add your code here
         // Send first message
         try {
-            String command = "HELP \n";
-            dos.writeUTF(command);
+            //String command = "HELP \n"; // This is for testing.
+            String command = "DEFINE " + database.getName() + " " + word + " \n";
+            dos.writeBytes(command);
 
             // Read welcome message
-            String code = "";
+            String code;
             String msg;
+            String mergedMsg = "";
+            Definition def = new Definition(word, database.getName());
             boolean stop = false;
             while(!stop) {
                 msg = br.readLine();
-                if (Character.isDigit(msg.charAt(0))) {
-                    // String starts with number, contains code
-                    code = msg.substring(0,2);
-                }
-                stop = StopReadingFromDict(code);
 
-                System.out.println(msg);
+                if (msg.length() > 1 && Character.isDigit(msg.charAt(0))) {
+                    // String starts with number, contains code
+                    code = msg.substring(0,3);
+
+                    // Each 151 entry refers to a new definition.
+                    if(code.equals("151") ) {
+                        set.add(def);
+                        def = new Definition(word, database.getName());
+                    }
+
+                    // Determine if this is the end of definitions.
+                    //stop = StopReadingFromDict(code);
+                    else if(code.equals("250") ) {
+                        stop = true;
+                    }
+
+                    else if(code.startsWith("5")) {
+                        throw new DictConnectionException();
+                    }
+                }
+
+
+                //System.out.println(msg + "ENDL HERE"); // for testing only.
+
+                def.appendDefinition(msg);
+
+
             }
-            System.out.println("Done connecting");
+            //System.out.println("Done connecting"); //
+            //set.add(def);
 
         } catch (IOException e) {
-            e.printStackTrace();
+            //e.printStackTrace(); // for testing only.
+            //throw DictConnectionException If the connection was interrupted.
+            throw new DictConnectionException();
         }
 
         return set;
