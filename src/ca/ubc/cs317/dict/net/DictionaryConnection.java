@@ -97,9 +97,9 @@ public class DictionaryConnection {
      * @throws DictConnectionException If the connection was interrupted or the messages don't match their expected value.
      */
     public synchronized Collection<Definition> getDefinitions(String word, Database database) throws DictConnectionException {
-
         Collection<Definition> set = new ArrayList<>();
 
+        // TODO: format of result. try "DEFINE fd-eng-rom computer" to see the problem.
         // Send first message
         try {
             //String command = "HELP \n"; // This is for testing.
@@ -170,6 +170,8 @@ public class DictionaryConnection {
 
         // TODO Add your code here
 
+
+
         return set;
     }
 
@@ -181,7 +183,55 @@ public class DictionaryConnection {
     public synchronized Map<String, Database> getDatabaseList() throws DictConnectionException {
         Map<String, Database> databaseMap = new HashMap<>();
 
-        // TODO Add your code here
+        try {
+            //String command = "HELP \n"; // This is for testing.
+            String command = "SHOW DB\n";
+            dos.writeBytes(command);
+
+            // Read welcome message
+            String code;
+            String msg;
+            boolean stop = false;
+            while(!stop) {
+                msg = br.readLine();
+
+                if (msg.length() > 3) {
+
+                    if (Character.isDigit(msg.charAt(0))) {
+                        // String starts with number, contains code
+                        code = msg.substring(0, 3);
+
+                        // Code 110 reminds the beginning of db definition.
+                        if (code.equals("110")) {
+                            msg = br.readLine();
+                        }
+
+                        // Determine if this is the end of definitions.
+                        //stop = StopReadingFromDict(code);
+                        else if (code.equals("250")) {
+                            stop = true;
+                        } else if (code.startsWith("5")) {
+                            throw new DictConnectionException();
+                        }
+                    }
+
+                    System.out.println(msg + "ENDL, size = " + msg.length() + "place of \":" + msg.indexOf("\"")); // for testing only.
+                    if (msg.contains("\"")) {
+                        String name = msg.substring(0, msg.indexOf("\""));
+                        String description = msg.substring(msg.indexOf("\""), msg.length() - 2);
+                        databaseMap.put(name, new Database(name, description));
+                    }
+                }
+
+            }
+            //System.out.println("Done connecting"); //
+            //set.add(def);
+
+        } catch (IOException e) {
+            //e.printStackTrace(); // for testing only.
+            //throw DictConnectionException If the connection was interrupted.
+            throw new DictConnectionException();
+        }
 
         return databaseMap;
     }
