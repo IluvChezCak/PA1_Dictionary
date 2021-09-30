@@ -107,10 +107,10 @@ public class DictionaryConnection {
             dos.writeBytes(command);
 
             // Read welcome message
-            String code;
+            String code = "";
             String msg;
             String mergedMsg = "";
-            Definition def = new Definition(word, database.getName());
+            Definition def = null;
             boolean stop = false;
             while(!stop) {
                 msg = br.readLine();
@@ -121,30 +121,26 @@ public class DictionaryConnection {
 
                     // Each 151 entry refers to a new definition.
                     if(code.equals("151") ) {
-                        set.add(def);
                         def = new Definition(word, database.getName());
-                    }
-
-                    // Determine if this is the end of definitions.
-                    //stop = StopReadingFromDict(code);
-                    else if(code.equals("250") ) {
-                        stop = true;
-                    }
-
-                    else if(code.startsWith("5")) {
-                        throw new DictConnectionException();
                     }
                 }
 
+                // will throw error if invalid code eg. starts with "5"
+                stop = StopReadingFromDict(code);
 
-                //System.out.println(msg + "ENDL HERE"); // for testing only.
+                if (def != null && code.equals("151")) {
+                    // Build definition
+                    def.appendDefinition(msg);
+                }
 
-                def.appendDefinition(msg);
-
-
+                if (msg.equals(".") && code.equals("151")) {
+                    // end of definition, create new (clone) definition, and reset definition builder object
+                    Definition defToReturn = new Definition(word, database.getName());
+                    defToReturn.setDefinition(def.getDefinition());
+                    set.add(defToReturn);
+                    def = null;
+                }
             }
-            //System.out.println("Done connecting"); //
-            //set.add(def);
 
         } catch (IOException e) {
             //e.printStackTrace(); // for testing only.
@@ -207,12 +203,8 @@ public class DictionaryConnection {
                         }
 
                         // Determine if this is the end of definitions.
-                        //stop = StopReadingFromDict(code);
-                        else if (code.equals("250")) {
-                            stop = true;
-                        } else if (code.startsWith("5")) {
-                            throw new DictConnectionException();
-                        }
+                        // will throw error if invalid code eg. starts with "5"
+                        stop = StopReadingFromDict(code);
                     }
 
                     System.out.println(msg + "ENDL, size = " + msg.length() + "place of \":" + msg.indexOf("\"")); // for testing only.
@@ -249,13 +241,15 @@ public class DictionaryConnection {
         return set;
     }
 
-    private boolean StopReadingFromDict(String currentCode) {
+    private boolean StopReadingFromDict(String currentCode) throws DictConnectionException {
         if (!currentCode.isEmpty() && currentCode.startsWith("1")) {
             // There is text to follow
             return false;
-        } else {
+        } else if (currentCode.startsWith("250")) {
             // this is the last message
             return true;
+        } else if (currentCode.startsWith("5")) {
+            throw new DictConnectionException();
         }
     }
 }
