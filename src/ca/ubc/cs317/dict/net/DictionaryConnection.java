@@ -102,7 +102,7 @@ public class DictionaryConnection {
 
         // TODO: format of result. Put the database from result in the define.
 
-        // try "DEFINE fd-eng-rom computer" to see the problem. // This problem has finished.
+        // try "DEFINE fd-eng-rom computer" to see the problem. // This problem has solved.
 
         // Send first message
         try {
@@ -176,8 +176,44 @@ public class DictionaryConnection {
     public synchronized Set<String> getMatchList(String word, MatchingStrategy strategy, Database database) throws DictConnectionException {
         Set<String> set = new LinkedHashSet<>();
 
-        // TODO Add your code here
+        // TODO: Fix the bug:
+        //  501: use * as DB, Match Prefix as STRAT, type bunny, select bunny hug
+        try {
+            //String command = "HELP \n"; // This is for testing.
+            //String command = "MATCH " + database.getName() + " " + strategy.getName() + " " + word + " \n";
+            String command = "MATCH " + database.getName() + " " + strategy.getName() + " ";
+            command = command + Arrays.toString(DictStringParser.splitAtoms(word)) + " \n";
+            dos.writeBytes(command);
 
+            // Read welcome message
+            String code = "";
+            String msg;
+            boolean stop = false;
+            while(!stop) {
+                msg = br.readLine();
+                //System.out.println(msg + "ENDL, size = " + msg.length() + " place of \":" + msg.indexOf("\"")); // for testing only.
+                if (msg.length() > 1 && Character.isDigit(msg.charAt(0))) {
+                    // String starts with number, contains code
+                    code = msg.substring(0,3);
+
+                } else if (!msg.equals(".")) {  // Not the last line
+
+                    if (msg.contains("\"")) {   // find the "
+                        String theWord = msg.substring(msg.indexOf("\"")+1, msg.length() - 1);
+                        set.add(theWord);
+                    }
+                }
+
+                // will throw error if invalid code eg. starts with "5"
+                stop = StopReadingFromDict(code);
+
+            }
+
+        } catch (IOException e) {
+            //e.printStackTrace(); // for testing only.
+            //throw DictConnectionException If the connection was interrupted.
+            throw new DictConnectionException();
+        }
 
         return set;
     }
@@ -191,7 +227,7 @@ public class DictionaryConnection {
         Map<String, Database> databaseMap = new HashMap<>();
 
         try {
-            System.out.println("getDatabaseList :)");
+            //System.out.println("getDatabaseList :)");
             //String command = "HELP \n"; // This is for testing.
             String command = "SHOW DB\n";
             dos.writeBytes(command);
@@ -219,7 +255,7 @@ public class DictionaryConnection {
                         stop = StopReadingFromDict(code);
                     }
 
-                    System.out.println(msg + "ENDL, size = " + msg.length() + "place of \":" + msg.indexOf("\"")); // for testing only.
+                    //System.out.println(msg + "ENDL, size = " + msg.length() + "place of \":" + msg.indexOf("\"")); // for testing only.
                     if (msg.contains("\"")) {
                         String name = msg.substring(0, msg.indexOf("\""));
                         String description = msg.substring(msg.indexOf("\""), msg.length() - 2);
@@ -248,7 +284,56 @@ public class DictionaryConnection {
     public synchronized Set<MatchingStrategy> getStrategyList() throws DictConnectionException {
         Set<MatchingStrategy> set = new LinkedHashSet<>();
 
-        // TODO Add your code here
+        try {
+            //System.out.println("getDatabaseList :)");
+            //String command = "HELP \n"; // This is for testing.
+            String command = "SHOW STRATEGIES\n";
+            dos.writeBytes(command);
+
+            // Read welcome message
+            String code;
+            String msg;
+            boolean stop = false;
+            while(!stop) {
+                msg = br.readLine();
+
+                if (msg.length() > 3) {
+
+                    if (Character.isDigit(msg.charAt(0))) {
+                        // String starts with number, contains code
+                        code = msg.substring(0, 3);
+
+                        // Code 111 reminds the beginning of db definition.
+                        if (code.equals("111")) {
+                            msg = br.readLine();
+                        }
+
+                        // Determine if this is the end of definitions.
+                        // will throw error if invalid code eg. starts with "5"
+                        stop = StopReadingFromDict(code);
+                    }
+
+                    //System.out.println(msg + "ENDL, size = " + msg.length() + "place of \":" + msg.indexOf("\"")); // for testing only.
+                    if (msg.contains("\"")) {
+                        String name = msg.substring(0, msg.indexOf("\""));
+                        //System.out.print ("The Name: " + name);
+                        String description = msg.substring(msg.indexOf("\"") + 1, msg.length() - 1);
+                        //System.out.println ("\\The description: " + description);
+                        set.add(new MatchingStrategy(name, description));
+                    }
+                }
+
+            }
+            //System.out.println("Done connecting"); //
+            //set.add(def);
+
+        } catch (IOException e) {
+            //e.printStackTrace(); // for testing only.
+            //throw DictConnectionException If the connection was interrupted.
+            throw new DictConnectionException();
+        }
+
+        //return databaseMap;
 
         return set;
     }
