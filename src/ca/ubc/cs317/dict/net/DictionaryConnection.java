@@ -6,12 +6,25 @@ import ca.ubc.cs317.dict.model.MatchingStrategy;
 
 import java.io.*;
 import java.net.Socket;
-import java.net.UnknownHostException;
 import java.util.*;
 
 /**
  * Created by Jonatan on 2017-09-09.
  */
+
+
+/*       TODO LIST
+
+Constructor: fail if initial code is a transient failure
+Constructor: fail if there is no initial message
+close: properly sends a closing command                     // Tried to fix
+close: properly closes the connection after command         // Tried to fix, need to be validated after last one.
+getDatabaseList: name of databases, empty list
+getStrategyList: description, empty list
+getMatchList: quite a few
+getDefinitions: quite a few
+*/
+
 public class DictionaryConnection {
 
     private Socket socket;
@@ -54,9 +67,7 @@ public class DictionaryConnection {
                 System.out.println(msg);
             }
             System.out.println("Done connecting");
-        } catch (UnknownHostException e) {
-            throw new DictConnectionException(e);
-        } catch (IOException e) {
+        } catch (Exception e) {
             throw new DictConnectionException(e);
         }
     }
@@ -78,8 +89,8 @@ public class DictionaryConnection {
      */
     public synchronized void close() {
 
-
         try {
+            dos.writeBytes("QUIT");
             socket.close();
         } catch (IOException e) {
             e.printStackTrace();
@@ -122,29 +133,14 @@ public class DictionaryConnection {
                 if (msg.length() > 1 && Character.isDigit(msg.charAt(0))) {
                     // String starts with number, contains code
                     code = msg.substring(0,3);
-
-                    /*
-                            NO LONGER IN USE.
-                    //Each 151 entry refers to a new definition.
-                    //if(code.equals("151") ) {
-                    //    def = new Definition(word, database.getName());
-                    }
-                    */
                 }
 
                 // will throw error if invalid code eg. starts with "5"
                 stop = StopReadingFromDict(code);
 
-                //if (def != null && code.equals("151")) {
-                    // Build definition
-                //    def.appendDefinition(msg);
-                //}
-
-                if (msg.equals(".")){ //&& (code.equals("151") || code.equals("250"))) {
+                if (msg.equals(".")){
                     // end of definition, create new (clone) definition, and reset definition builder object
                     System.out.println("New Def!");
-                    //Definition defToReturn = new Definition(word, database.getName());
-                    //defToReturn.setDefinition(def.getDefinition());
                     set.add(def);
                     def = new Definition(word, database.getName());
                 }
