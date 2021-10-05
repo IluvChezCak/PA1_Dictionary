@@ -33,6 +33,7 @@ public class DictionaryConnection {
     public DictionaryConnection(String host, int port) throws DictConnectionException {
 
         try {
+            System.out.println("DictionaryConnect Started");
             socket = new Socket(host, port);
             dis = new DataInputStream(socket.getInputStream());
             br = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
@@ -46,7 +47,7 @@ public class DictionaryConnection {
                 msg = br.readLine();
                 if (Character.isDigit(msg.charAt(0))) {
                     // String starts with number, contains code
-                    code = msg.substring(0,2);
+                    code = msg.substring(0,3);
                 }
                 stop = StopReadingFromDict(code);
 
@@ -99,7 +100,10 @@ public class DictionaryConnection {
     public synchronized Collection<Definition> getDefinitions(String word, Database database) throws DictConnectionException {
         Collection<Definition> set = new ArrayList<>();
 
-        // TODO: format of result. try "DEFINE fd-eng-rom computer" to see the problem.
+        // TODO: format of result. Put the database from result in the define.
+
+        // try "DEFINE fd-eng-rom computer" to see the problem. // This problem has finished.
+
         // Send first message
         try {
             //String command = "HELP \n"; // This is for testing.
@@ -110,35 +114,43 @@ public class DictionaryConnection {
             String code = "";
             String msg;
             String mergedMsg = "";
-            Definition def = null;
+            Definition def = new Definition(word, database.getName());
             boolean stop = false;
             while(!stop) {
                 msg = br.readLine();
-
+                System.out.println(msg + "ENDL, size = " + msg.length() + " place of \":" + msg.indexOf("\"")); // for testing only.
                 if (msg.length() > 1 && Character.isDigit(msg.charAt(0))) {
                     // String starts with number, contains code
                     code = msg.substring(0,3);
 
-                    // Each 151 entry refers to a new definition.
-                    if(code.equals("151") ) {
-                        def = new Definition(word, database.getName());
+                    /*
+                            NO LONGER IN USE.
+                    //Each 151 entry refers to a new definition.
+                    //if(code.equals("151") ) {
+                    //    def = new Definition(word, database.getName());
                     }
+                    */
                 }
 
                 // will throw error if invalid code eg. starts with "5"
                 stop = StopReadingFromDict(code);
 
-                if (def != null && code.equals("151")) {
+                //if (def != null && code.equals("151")) {
                     // Build definition
-                    def.appendDefinition(msg);
+                //    def.appendDefinition(msg);
+                //}
+
+                if (msg.equals(".")){ //&& (code.equals("151") || code.equals("250"))) {
+                    // end of definition, create new (clone) definition, and reset definition builder object
+                    System.out.println("New Def!");
+                    //Definition defToReturn = new Definition(word, database.getName());
+                    //defToReturn.setDefinition(def.getDefinition());
+                    set.add(def);
+                    def = new Definition(word, database.getName());
                 }
 
-                if (msg.equals(".") && code.equals("151")) {
-                    // end of definition, create new (clone) definition, and reset definition builder object
-                    Definition defToReturn = new Definition(word, database.getName());
-                    defToReturn.setDefinition(def.getDefinition());
-                    set.add(defToReturn);
-                    def = null;
+                if (!code.equals("150")) {
+                    def.appendDefinition(msg);
                 }
             }
 
@@ -167,7 +179,6 @@ public class DictionaryConnection {
         // TODO Add your code here
 
 
-
         return set;
     }
 
@@ -180,6 +191,7 @@ public class DictionaryConnection {
         Map<String, Database> databaseMap = new HashMap<>();
 
         try {
+            System.out.println("getDatabaseList :)");
             //String command = "HELP \n"; // This is for testing.
             String command = "SHOW DB\n";
             dos.writeBytes(command);
@@ -242,14 +254,19 @@ public class DictionaryConnection {
     }
 
     private boolean StopReadingFromDict(String currentCode) throws DictConnectionException {
-        if (!currentCode.isEmpty() && currentCode.startsWith("1")) {
+        //System.out.println("Code:" + currentCode );
+        if (currentCode.startsWith("1")) {
             // There is text to follow
             return false;
         } else if (currentCode.startsWith("250")) {
             // this is the last message
             return true;
+        } else if (currentCode.startsWith("220")) {
+            //connection finished
+            return true;
         } else if (currentCode.startsWith("5")) {
             throw new DictConnectionException();
         }
+        return false;
     }
 }
