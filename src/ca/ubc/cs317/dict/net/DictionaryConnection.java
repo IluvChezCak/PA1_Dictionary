@@ -58,6 +58,10 @@ public class DictionaryConnection {
             boolean stop = false;
             while(!stop) {
                 msg = br.readLine();
+                if (msg == null) {
+                    throw new DictConnectionException("Received Empty Message");
+                }
+
                 if (Character.isDigit(msg.charAt(0))) {
                     // String starts with number, contains code
                     code = msg.substring(0,3);
@@ -90,8 +94,26 @@ public class DictionaryConnection {
     public synchronized void close() {
 
         try {
-            dos.writeBytes("QUIT");
-            socket.close();
+            dos.writeBytes("QUIT\n");
+
+            // Read welcome message
+            String code = "";
+            String msg;
+            boolean stop = false;
+            while(!stop) {
+                msg = br.readLine();
+
+                if (Character.isDigit(msg.charAt(0))) {
+                    code = msg.substring(0,3);
+                }
+
+                if (code.equals("221")) {
+                    socket.close();
+                    stop = true;
+                }
+            }
+
+//            socket.close();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -178,7 +200,10 @@ public class DictionaryConnection {
             //String command = "HELP \n"; // This is for testing.
             //String command = "MATCH " + database.getName() + " " + strategy.getName() + " " + word + " \n";
             String command = "MATCH " + database.getName() + " " + strategy.getName() + " ";
-            command = command + Arrays.toString(DictStringParser.splitAtoms(word)) + " \n";
+            command = command + "\"" + Arrays.toString(DictStringParser.splitAtoms(word))
+                    .replace("[", "\"")
+                    .replace("]", "\"")
+                    + "\"\n";
             dos.writeBytes(command);
 
             // Read welcome message
@@ -223,8 +248,6 @@ public class DictionaryConnection {
         Map<String, Database> databaseMap = new HashMap<>();
 
         try {
-            //System.out.println("getDatabaseList :)");
-            //String command = "HELP \n"; // This is for testing.
             String command = "SHOW DB\n";
             dos.writeBytes(command);
 
@@ -253,19 +276,16 @@ public class DictionaryConnection {
 
                     //System.out.println(msg + "ENDL, size = " + msg.length() + "place of \":" + msg.indexOf("\"")); // for testing only.
                     if (msg.contains("\"")) {
-                        String name = msg.substring(0, msg.indexOf("\""));
+                        String name = msg.substring(0, msg.indexOf("\"")).trim();
                         String description = msg.substring(msg.indexOf("\""), msg.length() - 2);
                         databaseMap.put(name, new Database(name, description));
                     }
                 }
 
             }
-            //System.out.println("Done connecting"); //
-            //set.add(def);
 
         } catch (IOException e) {
             //e.printStackTrace(); // for testing only.
-            //throw DictConnectionException If the connection was interrupted.
             throw new DictConnectionException();
         }
 
@@ -311,7 +331,7 @@ public class DictionaryConnection {
 
                     //System.out.println(msg + "ENDL, size = " + msg.length() + "place of \":" + msg.indexOf("\"")); // for testing only.
                     if (msg.contains("\"")) {
-                        String name = msg.substring(0, msg.indexOf("\""));
+                        String name = msg.substring(0, msg.indexOf("\"")).trim();
                         //System.out.print ("The Name: " + name);
                         String description = msg.substring(msg.indexOf("\"") + 1, msg.length() - 1);
                         //System.out.println ("\\The description: " + description);
@@ -345,9 +365,18 @@ public class DictionaryConnection {
         } else if (currentCode.startsWith("220")) {
             //connection finished
             return true;
-        } else if (currentCode.startsWith("5")) {
-            throw new DictConnectionException();
+        } else if (currentCode.startsWith("4")) {
+            // transient connection failure
+            throw new DictConnectionException("Transient Negative Completion");
+        } else if (currentCode.startsWith("50")) {
+            throw new DictConnectionException("Syntax Error");
+        } else if (currentCode.startsWith("53")) {
+            throw new DictConnectionException("Access Denied");
+        } else if (currentCode.startsWith("55")) {
+            // Don't throw error, valid command, but for reasons, no matches
+            return true;
         }
+
         return false;
     }
 }
