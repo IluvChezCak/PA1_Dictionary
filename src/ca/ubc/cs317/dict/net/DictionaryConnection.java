@@ -14,15 +14,33 @@ import java.util.*;
 
 
 /*       TODO LIST
+    getDefinitions: properly returns one multi-line definition
+        org.opentest4j.AssertionFailedError: expected: <[('word'@'first': 'This is a very long definition
+        that spans several lines
+        and that can be confusing.
+        It can even have
 
-Constructor: fail if initial code is a transient failure
-Constructor: fail if there is no initial message
-close: properly sends a closing command                     // Tried to fix
-close: properly closes the connection after command         // Tried to fix, need to be validated after last one.
-getDatabaseList: name of databases, empty list
-getStrategyList: description, empty list
-getMatchList: quite a few
-getDefinitions: quite a few
+        blank lines.')]> but was: <[('word'@'first': 'This is a very long definition
+        that spans several lines
+        and that can be confusing.
+        It can even have
+        blank lines.')]>
+
+    getDefinitions: properly returns multiple multi-line definition
+        org.opentest4j.AssertionFailedError: expected: <[('word'@'first': 'This is a another very long definition
+        that again spans several lines
+        and that does not have any meaning.'), ('word'@'first': 'This is a very long definition
+        that spans several lines
+        and that can be confusing.
+        It can even have
+
+        blank lines.')]> but was: <[('word'@'first': 'This is a another very long definition
+        that again spans several lines
+        and that does not have any meaning.'), ('word'@'first': 'This is a very long definition
+        that spans several lines
+        and that can be confusing.
+        It can even have
+        blank lines.')]>
 */
 
 public class DictionaryConnection {
@@ -140,13 +158,15 @@ public class DictionaryConnection {
         // Send first message
         try {
             //String command = "HELP \n"; // This is for testing.
-            String command = "DEFINE " + database.getName() + " " + word + " \n";
+            String command = "DEFINE " + database.getName() + " \"" + word + "\"\n";
             dos.writeBytes(command);
 
             // Read welcome message
             String code = "";
+            String realDictName = "";
             String msg;
             String mergedMsg = "";
+//            Definition def = null;
             Definition def = new Definition(word, database.getName());
             boolean stop = false;
             while(!stop) {
@@ -155,6 +175,17 @@ public class DictionaryConnection {
                 if (msg.length() > 1 && Character.isDigit(msg.charAt(0))) {
                     // String starts with number, contains code
                     code = msg.substring(0,3);
+
+                    if (code.equals("151")) {
+                        // When the * or ! is specified we need to extract the dictName from the message
+                        realDictName = getDictNameFromMsg(msg);
+                        def = new Definition(word, realDictName);
+                    }
+
+                } else if (msg.length() > 1 && code.equals("151")) {
+                    // This ELSE IF statement makes it so that the first line with the code is not added to the definition.
+                    // Only append to definition when code is currently equal to 151 and the message is not empty.
+                    def.appendDefinition(msg);
                 }
 
                 // will throw error if invalid code eg. starts with "5"
@@ -163,13 +194,15 @@ public class DictionaryConnection {
                 if (msg.equals(".")){
                     // end of definition, create new (clone) definition, and reset definition builder object
                     System.out.println("New Def!");
+
+//                    String realDictName = getDictNameFromMsg(msg);
                     set.add(def);
+//                    String description = msg.substring(msg.indexOf("\"")+1, msg.length()-1);
                     def = new Definition(word, database.getName());
+                    realDictName = "";
                 }
 
-                if (!code.equals("150")) {
-                    def.appendDefinition(msg);
-                }
+
             }
 
         } catch (IOException e) {
@@ -200,10 +233,11 @@ public class DictionaryConnection {
             //String command = "HELP \n"; // This is for testing.
             //String command = "MATCH " + database.getName() + " " + strategy.getName() + " " + word + " \n";
             String command = "MATCH " + database.getName() + " " + strategy.getName() + " ";
-            command = command + "\"" + Arrays.toString(DictStringParser.splitAtoms(word))
+            command = command + Arrays.toString(DictStringParser.splitAtoms(word))
                     .replace("[", "\"")
                     .replace("]", "\"")
-                    + "\"\n";
+                    + "\n";
+            System.out.println("New Def!");
             dos.writeBytes(command);
 
             // Read welcome message
@@ -277,7 +311,7 @@ public class DictionaryConnection {
                     //System.out.println(msg + "ENDL, size = " + msg.length() + "place of \":" + msg.indexOf("\"")); // for testing only.
                     if (msg.contains("\"")) {
                         String name = msg.substring(0, msg.indexOf("\"")).trim();
-                        String description = msg.substring(msg.indexOf("\""), msg.length() - 2);
+                        String description = msg.substring(msg.indexOf("\"")+1, msg.length()-1);
                         databaseMap.put(name, new Database(name, description));
                     }
                 }
@@ -378,5 +412,13 @@ public class DictionaryConnection {
         }
 
         return false;
+    }
+
+    private String getDictNameFromMsg(String msg) {
+        int firstQuoteIndex = msg.indexOf("\"");
+        int secondQuoteIndex = msg.indexOf("\"", firstQuoteIndex+1);
+        int endIndex = msg.indexOf(" ", secondQuoteIndex+2);
+        String dictName = msg.substring(secondQuoteIndex+2, endIndex);
+        return dictName;
     }
 }
