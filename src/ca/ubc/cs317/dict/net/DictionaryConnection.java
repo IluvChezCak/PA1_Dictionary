@@ -12,42 +12,10 @@ import java.util.*;
  * Created by Jonatan on 2017-09-09.
  */
 
-
-/*       TODO LIST
-    getDefinitions: properly returns one multi-line definition
-        org.opentest4j.AssertionFailedError: expected: <[('word'@'first': 'This is a very long definition
-        that spans several lines
-        and that can be confusing.
-        It can even have
-
-        blank lines.')]> but was: <[('word'@'first': 'This is a very long definition
-        that spans several lines
-        and that can be confusing.
-        It can even have
-        blank lines.')]>
-
-    getDefinitions: properly returns multiple multi-line definition
-        org.opentest4j.AssertionFailedError: expected: <[('word'@'first': 'This is a another very long definition
-        that again spans several lines
-        and that does not have any meaning.'), ('word'@'first': 'This is a very long definition
-        that spans several lines
-        and that can be confusing.
-        It can even have
-
-        blank lines.')]> but was: <[('word'@'first': 'This is a another very long definition
-        that again spans several lines
-        and that does not have any meaning.'), ('word'@'first': 'This is a very long definition
-        that spans several lines
-        and that can be confusing.
-        It can even have
-        blank lines.')]>
-*/
-
 public class DictionaryConnection {
 
     private Socket socket;
     private DataOutputStream dos;
-    private DataInputStream dis;
     private BufferedReader br;
 
 
@@ -62,15 +30,17 @@ public class DictionaryConnection {
      * don't match their expected value.
      */
     public DictionaryConnection(String host, int port) throws DictConnectionException {
-
         try {
-            System.out.println("DictionaryConnect Started");
+            // Connect to socket using host and port
             socket = new Socket(host, port);
-            dis = new DataInputStream(socket.getInputStream());
+
+            // Save input stream reader and output stream to class properties to use throughout the methods
             br = new BufferedReader(new InputStreamReader(socket.getInputStream(), "UTF-8"));
             dos = new DataOutputStream(socket.getOutputStream());
 
             // Read welcome message
+            // Initialize variables for reading message to string, reading code from message string, and condition
+            // variable to know when to stop reading the message
             String code = "";
             String msg;
             boolean stop = false;
@@ -81,15 +51,16 @@ public class DictionaryConnection {
                 }
 
                 if (Character.isDigit(msg.charAt(0))) {
-                    // String starts with number, contains code
+                    // If the message string starts with number, that number is the response code
                     code = msg.substring(0,3);
                 }
-                stop = StopReadingFromDict(code);
 
-                System.out.println(msg);
+                // Check if code tells us to stop reading message
+                // Will throw error if invalid code eg. starts with "5"
+                stop = StopReadingFromDict(code);
             }
-            System.out.println("Done connecting");
         } catch (Exception e) {
+            // Any exceptions related to incorrect or invalid connection info provided should be caught here
             throw new DictConnectionException(e);
         }
     }
@@ -110,11 +81,11 @@ public class DictionaryConnection {
      *
      */
     public synchronized void close() {
-
         try {
             dos.writeBytes("QUIT\n");
 
-            // Read welcome message
+            // Initialize variables for reading message to string, reading code from message string, and condition
+            // variable to know when to stop reading the message
             String code = "";
             String msg;
             boolean stop = false;
@@ -122,20 +93,24 @@ public class DictionaryConnection {
                 msg = br.readLine();
 
                 if (Character.isDigit(msg.charAt(0))) {
+                    // If the message string starts with number, that number is the response code
                     code = msg.substring(0,3);
                 }
 
                 if (code.equals("221")) {
+                    // This code in response to the "QUIT" command means we can safely close the socket.
                     socket.close();
                     stop = true;
                 }
             }
-
-//            socket.close();
         } catch (IOException e) {
+            // Any extraneous IO exceptions should be caught here
             e.printStackTrace();
         }
+        // Set socket and streams/readers to null
         socket = null;
+        dos = null;
+        br = null;
     }
 
     /** Requests and retrieves all definitions for a specific word.
@@ -150,34 +125,30 @@ public class DictionaryConnection {
      */
     public synchronized Collection<Definition> getDefinitions(String word, Database database) throws DictConnectionException {
         Collection<Definition> set = new ArrayList<>();
-
-        // TODO: format of result. Put the database from result in the define.
-
-        // try "DEFINE fd-eng-rom computer" to see the problem. // This problem has solved.
-
-        // Send first message
         try {
-            //String command = "HELP \n"; // This is for testing.
+            // Format arguments as command string
             String command = "DEFINE " + database.getName() + " \"" + word + "\"\n";
             dos.writeBytes(command);
 
-            // Read welcome message
+            // Initialize variables for reading message to string, reading code from message string, and condition
+            // variable to know when to stop reading the message.
+            // We also need a variable to save the definition read from the message string,
+            // and a placeholder string variable for the dictionary name read from the message
             String code = "";
-            String realDictName = "";
             String msg;
-            String mergedMsg = "";
-//            Definition def = null;
-            Definition def = new Definition(word, database.getName());
             boolean stop = false;
+            Definition def = new Definition(word, database.getName());
+            String realDictName = "";
             while(!stop) {
                 msg = br.readLine();
-                System.out.println(msg + "ENDL, size = " + msg.length() + " place of \":" + msg.indexOf("\"")); // for testing only.
                 if (msg.length() > 1 && Character.isDigit(msg.charAt(0))) {
-                    // String starts with number, contains code
+                    // If the message string starts with number, that number is the response code
                     code = msg.substring(0,3);
 
                     if (code.equals("151")) {
-                        // When the * or ! is specified we need to extract the dictName from the message
+                        // Only when a new code is sent we want to check if we need to grab the dictionary name from the
+                        // message.
+                        // Eg. when the * or ! is specified we need to extract the dictName from the message
                         realDictName = getDictNameFromMsg(msg);
                         def = new Definition(word, realDictName);
                     }
@@ -188,16 +159,13 @@ public class DictionaryConnection {
                     def.appendDefinition(msg);
                 }
 
-                // will throw error if invalid code eg. starts with "5"
+                // Check if code tells us to stop reading message
+                // Will throw error if invalid code eg. starts with "5"
                 stop = StopReadingFromDict(code);
 
                 if (msg.equals(".")){
-                    // end of definition, create new (clone) definition, and reset definition builder object
-                    System.out.println("New Def!");
-
-//                    String realDictName = getDictNameFromMsg(msg);
+                    // end of definition, add definition to definition set and reset placeholder definition variables
                     set.add(def);
-//                    String description = msg.substring(msg.indexOf("\"")+1, msg.length()-1);
                     def = new Definition(word, database.getName());
                     realDictName = "";
                 }
@@ -206,8 +174,7 @@ public class DictionaryConnection {
             }
 
         } catch (IOException e) {
-            //e.printStackTrace(); // for testing only.
-            //throw DictConnectionException If the connection was interrupted.
+            // Any extraneous IO exceptions should be caught here
             throw new DictConnectionException();
         }
 
@@ -226,47 +193,45 @@ public class DictionaryConnection {
      */
     public synchronized Set<String> getMatchList(String word, MatchingStrategy strategy, Database database) throws DictConnectionException {
         Set<String> set = new LinkedHashSet<>();
-
-        // TODO: Fix the bug:
-        //  501: use * as DB, Match Prefix as STRAT, type bunny, select bunny hug
         try {
-            //String command = "HELP \n"; // This is for testing.
-            //String command = "MATCH " + database.getName() + " " + strategy.getName() + " " + word + " \n";
+            // Format arguments as MATCH command string
             String command = "MATCH " + database.getName() + " " + strategy.getName() + " ";
             command = command + Arrays.toString(DictStringParser.splitAtoms(word))
                     .replace("[", "\"")
                     .replace("]", "\"")
                     + "\n";
-            System.out.println("New Def!");
             dos.writeBytes(command);
 
-            // Read welcome message
+            // Initialize variables for reading message to string, reading code from message string, and condition
+            // variable to know when to stop reading the message.
             String code = "";
             String msg;
             boolean stop = false;
             while(!stop) {
                 msg = br.readLine();
-                //System.out.println(msg + "ENDL, size = " + msg.length() + " place of \":" + msg.indexOf("\"")); // for testing only.
+
                 if (msg.length() > 1 && Character.isDigit(msg.charAt(0))) {
-                    // String starts with number, contains code
+                    // If the message string starts with number, that number is the response code
                     code = msg.substring(0,3);
 
-                } else if (!msg.equals(".")) {  // Not the last line
+                } else if (!msg.equals(".")) {
+                    // end of match, but not the end of message
 
-                    if (msg.contains("\"")) {   // find the "
+                    if (msg.contains("\"")) {
+                        // Find the index of the " character, which marks the start of the word to be matched
                         String theWord = msg.substring(msg.indexOf("\"")+1, msg.length() - 1);
                         set.add(theWord);
                     }
                 }
 
-                // will throw error if invalid code eg. starts with "5"
+                // Check if code tells us to stop reading message
+                // Will throw error if invalid code eg. starts with "5"
                 stop = StopReadingFromDict(code);
 
             }
 
         } catch (IOException e) {
-            //e.printStackTrace(); // for testing only.
-            //throw DictConnectionException If the connection was interrupted.
+            // Any extraneous IO exceptions should be caught here
             throw new DictConnectionException();
         }
 
@@ -285,7 +250,8 @@ public class DictionaryConnection {
             String command = "SHOW DB\n";
             dos.writeBytes(command);
 
-            // Read welcome message
+            // Initialize variables for reading message to string, reading code from message string, and condition
+            // variable to know when to stop reading the message.
             String code;
             String msg;
             boolean stop = false;
@@ -295,10 +261,10 @@ public class DictionaryConnection {
                 if (msg.length() > 3) {
 
                     if (Character.isDigit(msg.charAt(0))) {
-                        // String starts with number, contains code
+                        // If the message string starts with number, that number is the response code
                         code = msg.substring(0, 3);
 
-                        // Code 110 reminds the beginning of db definition.
+                        // Code 110 marks the beginning of db definition.
                         if (code.equals("110")) {
                             msg = br.readLine();
                         }
@@ -308,8 +274,8 @@ public class DictionaryConnection {
                         stop = StopReadingFromDict(code);
                     }
 
-                    //System.out.println(msg + "ENDL, size = " + msg.length() + "place of \":" + msg.indexOf("\"")); // for testing only.
                     if (msg.contains("\"")) {
+                        // The " character marks the start of the db name and the next " marks the start of the description.
                         String name = msg.substring(0, msg.indexOf("\"")).trim();
                         String description = msg.substring(msg.indexOf("\"")+1, msg.length()-1);
                         databaseMap.put(name, new Database(name, description));
@@ -319,7 +285,7 @@ public class DictionaryConnection {
             }
 
         } catch (IOException e) {
-            //e.printStackTrace(); // for testing only.
+            // Any extraneous IO exceptions should be caught here
             throw new DictConnectionException();
         }
 
@@ -333,14 +299,12 @@ public class DictionaryConnection {
      */
     public synchronized Set<MatchingStrategy> getStrategyList() throws DictConnectionException {
         Set<MatchingStrategy> set = new LinkedHashSet<>();
-
         try {
-            //System.out.println("getDatabaseList :)");
-            //String command = "HELP \n"; // This is for testing.
             String command = "SHOW STRATEGIES\n";
             dos.writeBytes(command);
 
-            // Read welcome message
+            // Initialize variables for reading message to string, reading code from message string, and condition
+            // variable to know when to stop reading the message.
             String code;
             String msg;
             boolean stop = false;
@@ -350,36 +314,31 @@ public class DictionaryConnection {
                 if (msg.length() > 3) {
 
                     if (Character.isDigit(msg.charAt(0))) {
-                        // String starts with number, contains code
+                        // If the message string starts with number, that number is the response code
                         code = msg.substring(0, 3);
 
-                        // Code 111 reminds the beginning of db definition.
+                        // Code 110 marks the beginning of strategy
                         if (code.equals("111")) {
                             msg = br.readLine();
                         }
 
-                        // Determine if this is the end of definitions.
+                        // Determine if this is the end of message.
                         // will throw error if invalid code eg. starts with "5"
                         stop = StopReadingFromDict(code);
                     }
 
-                    //System.out.println(msg + "ENDL, size = " + msg.length() + "place of \":" + msg.indexOf("\"")); // for testing only.
                     if (msg.contains("\"")) {
+                        // Use " characters as markers for string parsing
                         String name = msg.substring(0, msg.indexOf("\"")).trim();
-                        //System.out.print ("The Name: " + name);
                         String description = msg.substring(msg.indexOf("\"") + 1, msg.length() - 1);
-                        //System.out.println ("\\The description: " + description);
                         set.add(new MatchingStrategy(name, description));
                     }
                 }
 
             }
-            //System.out.println("Done connecting"); //
-            //set.add(def);
 
         } catch (IOException e) {
-            //e.printStackTrace(); // for testing only.
-            //throw DictConnectionException If the connection was interrupted.
+            // Any extraneous IO exceptions should be caught here
             throw new DictConnectionException();
         }
 
@@ -388,6 +347,12 @@ public class DictionaryConnection {
         return set;
     }
 
+    /** Checks a code number in a string to determine if we can stop reading message from input reader
+     *
+     * @param currentCode 3 digit code retrieved from message
+     * @return A boolean representing if we should stop reading from input reader
+     * @throws DictConnectionException If code represents some problem with the connection.
+     */
     private boolean StopReadingFromDict(String currentCode) throws DictConnectionException {
         //System.out.println("Code:" + currentCode );
         if (currentCode.startsWith("1")) {
@@ -414,6 +379,11 @@ public class DictionaryConnection {
         return false;
     }
 
+    /** Parses a dict name from a message string
+     *
+     * @param msg a line from a message reponse starting with a certain code
+     * @return A String representing a dict name
+     */
     private String getDictNameFromMsg(String msg) {
         int firstQuoteIndex = msg.indexOf("\"");
         int secondQuoteIndex = msg.indexOf("\"", firstQuoteIndex+1);
