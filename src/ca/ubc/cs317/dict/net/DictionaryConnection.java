@@ -157,6 +157,9 @@ public class DictionaryConnection {
                     // This ELSE IF statement makes it so that the first line with the code is not added to the definition.
                     // Only append to definition when code is currently equal to 151 and the message is not empty.
                     def.appendDefinition(msg);
+                } else if (msg.length() == 0) {
+                    // This ELSE IF statement adds a new line when there is one.
+                    def.appendDefinition(msg);
                 }
 
                 // Check if code tells us to stop reading message
